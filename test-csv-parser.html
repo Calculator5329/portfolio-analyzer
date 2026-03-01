@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSV Parser Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+    <h1>Test Fidelity CSV Parser</h1>
+    <input type="file" id="fileInput" accept=".csv">
+    <div id="results"></div>
+    
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const transactions = [];
+                    const resultsDiv = document.getElementById('results');
+                    
+                    for (const row of results.data) {
+                        const dateStr = row['Run Date'] || row['Trade Date'] || row['Date'];
+                        if (!dateStr) continue;
+                        
+                        const action = (row['Action'] || '').toUpperCase();
+                        if (!action || !action.includes('BOUGHT') && !action.includes('SOLD')) continue;
+                        
+                        const symbol = (row['Symbol'] || '').trim();
+                        if (!symbol || symbol === 'SPAXX') continue; // Skip money market
+                        
+                        const qtyStr = row['Quantity'] || '0';
+                        const quantity = Math.abs(parseFloat(qtyStr.toString().replace(/,/g, '')));
+                        
+                        const priceStr = row['Price ($)'] || row['Price'] || '0';
+                        const price = parseFloat(priceStr.toString().replace(/[$,]/g, ''));
+                        
+                        const date = new Date(dateStr);
+                        if (isNaN(date.getTime())) continue;
+                        
+                        transactions.push({
+                            date: date.toISOString().split('T')[0],
+                            action: action.includes('BOUGHT') || action.includes('BUY') ? 'BUY' : 'SELL',
+                            symbol,
+                            quantity,
+                            price
+                        });
+                    }
+                    
+                    transactions.sort((a, b) => a.date.localeCompare(b.date));
+                    
+                    // Get unique tickers
+                    const tickers = [...new Set(transactions.map(t => t.symbol))];
+                    
+                    resultsDiv.innerHTML = `
+                        <h2>Parse Results</h2>
+                        <p><strong>Total Transactions:</strong> ${transactions.length}</p>
+                        <p><strong>Unique Tickers:</strong> ${tickers.length}</p>
+                        <p><strong>Tickers:</strong> ${tickers.join(', ')}</p>
+                        <p><strong>Date Range:</strong> ${transactions[0]?.date} to ${transactions[transactions.length-1]?.date}</p>
+                        <h3>Sample Transactions:</h3>
+                        <pre>${JSON.stringify(transactions.slice(0, 10), null, 2)}</pre>
+                    `;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
